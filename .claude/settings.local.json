@@ -6,7 +6,8 @@
       "Bash(mkdir:*)",
       "Bash(for dir in app/routers app/services app/models app/prompts app/db)",
       "Bash(do touch \"$dir/__init__.py\")",
-      "Bash(done)"
+      "Bash(done)",
+      "Bash(git add:*)"
     ],
     "deny": [],
     "ask": []
