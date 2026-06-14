@@ -9,7 +9,9 @@
       "Bash(done)",
       "Bash(git add:*)",
       "Bash(git commit -m \"$(cat <<''EOF''\nInitial LiveCoach build - MVP foundation\n\nBackend:\n- FastAPI project structure with full routing\n- Claude API integration for AI negotiation coaching\n- Whisper API integration for voice transcription\n- Supabase database client and queries\n- Stripe payment infrastructure\n- Complete API endpoints (auth, sessions, AI, voice, billing)\n- AI system prompts and response parsing\n\nFrontend:\n- Next.js 14 with TypeScript and Tailwind CSS\n- Complete landing page with pricing\n- UI components (Button, Input, Textarea)\n- API client library\n- Supabase auth client\n\nDatabase:\n- Complete PostgreSQL schema\n- Users, sessions, turns, debrief tables\n- Row Level Security policies\n- Performance indexes\n\nDocumentation:\n- Comprehensive README\n- Step-by-step setup guide\n- Build status tracker\n- Environment templates\n- Database schema SQL\n\nCurrent Status: ~40% complete\nNext: Build live session screen, dashboard, and auth flow\n\nGenerated with Claude Code https://claude.com/claude-code\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(npm run build:*)",
+      "Bash(wc:*)"
     ],
     "deny": [],
     "ask": []
