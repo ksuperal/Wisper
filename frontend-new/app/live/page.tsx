@@ -7,17 +7,39 @@ import { Button } from '@/components/ui/button';
 import { LiveDot } from '@/components/ui/live-dot';
 import { DEMO_MOVES } from '@/lib/constants';
 import { Move } from '@/lib/types';
+import { getNextMove, checkBackendHealth } from '@/lib/api';
 
 export default function LiveSessionPage() {
   const router = useRouter();
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [useBackend, setUseBackend] = useState(false);
   const [idx, setIdx] = useState(0);
   const [phase, setPhase] = useState<'move' | 'thinking'>('move');
   const [input, setInput] = useState('');
   const [recording, setRecording] = useState(false);
+  const [moves, setMoves] = useState<Move[]>([DEMO_MOVES[0]]);
+  const [currentMove, setCurrentMove] = useState<Move>(DEMO_MOVES[0]);
   const recTimer = useRef<NodeJS.Timeout | null>(null);
 
-  const move = DEMO_MOVES[idx];
-  const isLast = idx === DEMO_MOVES.length - 1;
+  const move = useBackend ? currentMove : DEMO_MOVES[idx];
+  const isLast = useBackend ? false : idx === DEMO_MOVES.length - 1;
+
+  useEffect(() => {
+    // Check if we have a session ID from the strategy page
+    const storedSessionId = sessionStorage.getItem('currentSessionId');
+    if (storedSessionId) {
+      setSessionId(storedSessionId);
+    }
+
+    // Check if backend is available
+    checkBackendHealth().then((healthy) => {
+      setUseBackend(healthy && storedSessionId !== null && storedSessionId !== '1');
+    });
+
+    return () => {
+      if (recTimer.current) clearTimeout(recTimer.current);
+    };
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -38,18 +60,53 @@ export default function LiveSessionPage() {
     }, 1500);
   };
 
-  const getMove = () => {
+  const getMove = async () => {
     if (!input.trim() || phase === 'thinking') return;
-    if (isLast) {
-      alert('Deal closed! Session complete.');
+
+    if (!useBackend) {
+      // Demo mode - use existing logic
+      if (isLast) {
+        alert('Deal closed! Session complete.');
+        return;
+      }
+      setPhase('thinking');
+      setTimeout(() => {
+        setIdx((i) => i + 1);
+        setInput('');
+        setPhase('move');
+      }, 1700);
       return;
     }
+
+    // Real API mode
+    if (!sessionId) {
+      alert('No active session found');
+      return;
+    }
+
     setPhase('thinking');
-    setTimeout(() => {
-      setIdx(i => i + 1);
+
+    try {
+      const moveData = await getNextMove(sessionId, input);
+
+      // Convert API response to Move format
+      const newMove: Move = {
+        type: moveData.move_type as any,
+        say: moveData.line,
+        why: moveData.why,
+        watch: moveData.watch_for,
+        they: '', // Will be filled in next round
+      };
+
+      setMoves((prev) => [...prev, newMove]);
+      setCurrentMove(newMove);
       setInput('');
       setPhase('move');
-    }, 1700);
+    } catch (error) {
+      console.error('Failed to get next move:', error);
+      alert('Failed to get AI response. Please try again.');
+      setPhase('move');
+    }
   };
 
   return (
@@ -71,7 +128,9 @@ export default function LiveSessionPage() {
           <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--deal-danger)' }}>LIVE</span>
         </div>
         <span style={{ fontSize: 12, color: 'var(--deal-text-3)' }}>Salary · TechCorp</span>
-        <span style={{ fontSize: 11, color: '#444' }}>Move {idx + 1}</span>
+        <span style={{ fontSize: 11, color: '#444' }}>
+          Move {useBackend ? moves.length : idx + 1}
+        </span>
       </div>
 
       {/* Context bar */}
@@ -169,7 +228,7 @@ export default function LiveSessionPage() {
         {/* Danger row */}
         <div style={{ display: 'flex', marginTop: 12 }}>
           <button
-            onClick={() => router.push('/sessions/1/end')}
+            onClick={() => router.push(`/sessions/${sessionId || '1'}/end`)}
             className="press"
             style={{
               flex: 1,
@@ -179,14 +238,14 @@ export default function LiveSessionPage() {
               fontWeight: 500,
               background: 'none',
               border: 'none',
-              cursor: 'pointer'
+              cursor: 'pointer',
             }}
           >
             Deal closed
           </button>
           <div style={{ width: 1, background: 'var(--deal-raised)', margin: '4px 0' }} />
           <button
-            onClick={() => router.push('/sessions/1/end')}
+            onClick={() => router.push(`/sessions/${sessionId || '1'}/end`)}
             className="press"
             style={{
               flex: 1,
@@ -196,7 +255,7 @@ export default function LiveSessionPage() {
               fontWeight: 500,
               background: 'none',
               border: 'none',
-              cursor: 'pointer'
+              cursor: 'pointer',
             }}
           >
             Walk away

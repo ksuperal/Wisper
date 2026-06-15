@@ -18,7 +18,8 @@
       "Bash(gunzip:*)",
       "Bash(mv:*)",
       "Bash(tar:*)",
-      "Bash(npm run dev:*)"
+      "Bash(npm run dev:*)",
+      "Bash(xargs:*)"
     ],
     "deny": [],
     "ask": []

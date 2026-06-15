@@ -18,11 +18,21 @@ export function TabBar({ active, onChange }: TabBarProps) {
   return (
     <div
       style={{
+        position: 'fixed',
+        bottom: 0,
+        left: 0,
+        right: 0,
         height: 64,
         display: 'flex',
         borderTop: '1px solid var(--deal-raised)',
-        background: 'var(--deal-ink)',
-        flexShrink: 0,
+        background: 'rgba(10, 10, 10, 0.95)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+        boxShadow: '0 -2px 12px rgba(0, 0, 0, 0.4)',
+        zIndex: 100,
+        width: '100%',
+        maxWidth: '100vw',
+        overflow: 'hidden',
       }}
     >
       {TABS.map((tab) => {
@@ -34,6 +44,7 @@ export function TabBar({ active, onChange }: TabBarProps) {
             onClick={() => onChange?.(tab.id)}
             style={{
               flex: 1,
+              minWidth: 0,
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
@@ -41,6 +52,11 @@ export function TabBar({ active, onChange }: TabBarProps) {
               gap: 4,
               position: 'relative',
               paddingTop: 6,
+              paddingLeft: 4,
+              paddingRight: 4,
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
             }}
           >
             {isActive && (
@@ -57,15 +73,20 @@ export function TabBar({ active, onChange }: TabBarProps) {
             )}
             <Icon
               name={tab.icon}
-              size={23}
+              size={22}
               color={isActive ? 'var(--deal-signal)' : '#444'}
               strokeWidth={2}
             />
             <span
               style={{
-                fontSize: 11,
+                fontSize: 10,
                 color: isActive ? 'var(--deal-signal)' : '#444',
                 fontWeight: isActive ? 500 : 400,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                maxWidth: '100%',
+                lineHeight: 1.2,
               }}
             >
               {tab.label}

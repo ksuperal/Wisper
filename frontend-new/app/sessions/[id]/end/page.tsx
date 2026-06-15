@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import { Screen, SafeBottom } from '@/components/layout/screen';
 import { TopBar } from '@/components/layout/top-bar';
 import { Card } from '@/components/ui/card';
@@ -10,6 +10,7 @@ import { Field } from '@/components/ui/field';
 import { TextArea } from '@/components/ui/text-area';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icons';
+import { endSession, checkBackendHealth } from '@/lib/api';
 
 const OUTCOMES = [
   { id: 'won', label: 'Won the deal', c: 'var(--deal-signal)' },
@@ -28,20 +29,44 @@ const FEELINGS = [
 
 export default function SessionEndPage() {
   const router = useRouter();
+  const params = useParams();
+  const sessionId = (params?.id as string) || '1';
+
   const [data, setData] = useState({
-    outcome: 'won',
+    outcome: 'won' as 'won' | 'ongoing' | 'walked' | 'theywalked',
     agreed: '',
     feeling: 'confident',
   });
   const [loading, setLoading] = useState(false);
 
-  const handleDebrief = () => {
+  const handleDebrief = async () => {
     setLoading(true);
-    sessionStorage.setItem('sessionEndData', JSON.stringify(data));
-    setTimeout(() => {
+
+    try {
+      const isBackendHealthy = await checkBackendHealth();
+
+      if (isBackendHealthy && sessionId !== '1') {
+        // Update session via API
+        await endSession(sessionId, {
+          outcome: data.outcome,
+          outcome_details: data.agreed,
+          feeling: data.feeling,
+        });
+      }
+
+      // Store data in sessionStorage for debrief page
+      sessionStorage.setItem('sessionEndData', JSON.stringify(data));
+
+      // Navigate to debrief
+      router.push(`/sessions/${sessionId}/debrief`);
+    } catch (error) {
+      console.error('Failed to end session:', error);
+      // Fall back to demo mode
+      sessionStorage.setItem('sessionEndData', JSON.stringify(data));
+      router.push(`/sessions/${sessionId}/debrief`);
+    } finally {
       setLoading(false);
-      router.push('/sessions/1/debrief');
-    }, 1200);
+    }
   };
 
   const selectedOutcome = OUTCOMES.find((o) => o.id === data.outcome) || OUTCOMES[0];

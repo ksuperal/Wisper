@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Screen, SafeBottom } from '@/components/layout/screen';
 import { TabBar } from '@/components/layout/tab-bar';
@@ -13,6 +14,7 @@ import { DEMO_USER } from '@/lib/constants';
 import { getCompletedSessions, getStats } from '@/lib/storage';
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [sessions, setSessions] = useState<any[]>([]);
   const [stats, setStats] = useState({ totalSessions: 0, totalWon: 0 });
 
@@ -110,7 +112,11 @@ export default function DashboardPage() {
           {hasSessions ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
               {sessions.map((session) => (
-                <SessionRow key={session.id} session={session} />
+                <SessionRow
+                  key={session.id}
+                  session={session}
+                  onClick={() => router.push(`/sessions/${session.id}/debrief`)}
+                />
               ))}
             </div>
           ) : (
@@ -123,10 +129,11 @@ export default function DashboardPage() {
             />
           )}
 
-          <SafeBottom h={100} />
+          {/* Extra padding for fixed tab bar */}
+          <SafeBottom h={80} />
         </div>
 
-        <TabBar activeTab="home" />
+        <TabBar active="home" />
       </Screen>
     </div>
   );

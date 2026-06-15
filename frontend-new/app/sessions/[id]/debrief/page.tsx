@@ -1,14 +1,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import { Screen, SafeBottom } from '@/components/layout/screen';
 import { TopBar } from '@/components/layout/top-bar';
 import { Card } from '@/components/ui/card';
 import { ScoreBar } from '@/components/ui/score-bar';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icons';
-import { saveCompletedSession } from '@/lib/storage';
+import { saveCompletedSession, getSession } from '@/lib/storage';
+import { generateDebrief, checkBackendHealth } from '@/lib/api';
 
 interface DebriefData {
   score: number;
@@ -20,34 +21,94 @@ interface DebriefData {
 
 export default function DebriefPage() {
   const router = useRouter();
+  const params = useParams();
+  const sessionId = (params?.id as string) || '1';
+
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<DebriefData | null>(null);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    // Simulate AI debrief generation
-    setTimeout(() => {
-      setData({
-        score: 87,
-        moves: 4,
-        won: 11000,
-        strengths: [
-          'Strong anchor — you set $103K early, making their $82K feel low.',
-          'Used silence effectively after their "ceiling" claim.',
-          'Bridge to signing bonus was creative when base stalled.',
-        ],
-        improvements: [
-          'Your mirror could have been stronger — repeat their exact words.',
-          'You accepted the first counteroffer. Push one more time.',
-        ],
-      });
-      setLoading(false);
-    }, 2400);
-  }, []);
+    const loadDebrief = async () => {
+      try {
+        const endData = sessionStorage.getItem('sessionEndData');
+        if (!endData) {
+          router.push('/dashboard');
+          return;
+        }
+
+        const end = JSON.parse(endData);
+        const isBackendHealthy = await checkBackendHealth();
+
+        if (isBackendHealthy && sessionId !== '1') {
+          // Generate debrief via API
+          const debriefData = await generateDebrief(sessionId, {
+            outcome: end.outcome,
+            outcome_details: end.agreed,
+            feeling: end.feeling,
+          });
+
+          setData({
+            score: debriefData.score,
+            moves: debriefData.moves_count,
+            won: debriefData.won_amount,
+            strengths: debriefData.strengths,
+            improvements: debriefData.improvements,
+          });
+        } else {
+          // Use demo data
+          setData({
+            score: 87,
+            moves: 4,
+            won: 11000,
+            strengths: [
+              'Strong anchor — you set $103K early, making their $82K feel low.',
+              'Used silence effectively after their "ceiling" claim.',
+              'Bridge to signing bonus was creative when base stalled.',
+            ],
+            improvements: [
+              'Your mirror could have been stronger — repeat their exact words.',
+              'You accepted the first counteroffer. Push one more time.',
+            ],
+          });
+        }
+      } catch (error) {
+        console.error('Failed to load debrief:', error);
+        // Fall back to demo data
+        setData({
+          score: 87,
+          moves: 4,
+          won: 11000,
+          strengths: [
+            'Strong anchor — you set $103K early, making their $82K feel low.',
+            'Used silence effectively after their "ceiling" claim.',
+            'Bridge to signing bonus was creative when base stalled.',
+          ],
+          improvements: [
+            'Your mirror could have been stronger — repeat their exact words.',
+            'You accepted the first counteroffer. Push one more time.',
+          ],
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadDebrief();
+  }, [sessionId, router]);
 
   useEffect(() => {
-    // Save session to localStorage when debrief loads
+    // Save session to localStorage when debrief loads (only once)
     if (data && !saved) {
+      // Check if this session already exists in localStorage
+      const existingSession = getSession(sessionId);
+
+      if (existingSession) {
+        // Session already saved, don't save again
+        setSaved(true);
+        return;
+      }
+
       // Get session data from sessionStorage
       const setupData = sessionStorage.getItem('fullSetupData');
       const endData = sessionStorage.getItem('sessionEndData');
@@ -56,8 +117,9 @@ export default function DebriefPage() {
         const setup = JSON.parse(setupData);
         const end = JSON.parse(endData);
 
+        // Use the actual sessionId from URL, not a generated one
         saveCompletedSession({
-          id: '1',
+          id: sessionId,
           type: setup.category || 'salary',
           title: `${setup.category || 'Salary'} · TechCorp`,
           goal: setup.goal,
@@ -78,7 +140,7 @@ export default function DebriefPage() {
         setSaved(true);
       }
     }
-  }, [data, saved]);
+  }, [data, saved, sessionId]);
 
   if (loading || !data) {
     return (
@@ -107,50 +169,86 @@ export default function DebriefPage() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--deal-ink)', display: 'flex', flexDirection: 'column' }}>
       <Screen>
-        <TopBar title="Your debrief" onBack={() => router.push('/dashboard')} close />
+        <TopBar title="Session debrief" onBack={() => router.push('/dashboard')} close />
 
-        <div className="deal-scroll" style={{ flex: 1, overflowY: 'auto', padding: '24px 20px 0' }}>
+        <div className="deal-scroll" style={{ flex: 1, overflowY: 'auto', padding: '20px 20px 0' }}>
+          {/* Top outcome card */}
+          <Card
+            variant="signal"
+            style={{
+              marginBottom: 16,
+              padding: 20,
+              background: 'var(--deal-signal-bg)',
+              border: '1px solid var(--deal-signal-dim)',
+            }}
+          >
+            <div style={{ fontSize: 12, color: 'var(--deal-text-3)', marginBottom: 8 }}>
+              Salary · TechCorp · June 13
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--deal-text-2)', marginBottom: 12 }}>
+              $82K → $93K + $5K signing
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
+              <div
+                style={{
+                  fontSize: 40,
+                  fontWeight: 700,
+                  color: 'var(--deal-signal)',
+                  letterSpacing: '-0.03em',
+                }}
+              >
+                +${(data.won / 1000).toFixed(0)},000
+              </div>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--deal-signal)' }}>Above target</div>
+          </Card>
+
           {/* Score card */}
-          <Card variant="signal" style={{ marginBottom: 20, textAlign: 'center' }}>
-            <div className="caption" style={{ color: 'var(--deal-signal)', marginBottom: 8 }}>
-              YOUR SCORE
+          <Card style={{ marginBottom: 16, padding: 20, background: 'var(--deal-surface)' }}>
+            <div className="caption" style={{ fontSize: 10, marginBottom: 12, color: 'var(--deal-text-3)' }}>
+              NEGOTIATION SCORE
             </div>
-            <div
-              style={{
-                fontSize: 56,
-                fontWeight: 700,
-                color: 'var(--deal-signal)',
-                letterSpacing: '-0.03em',
-                marginBottom: 4,
-              }}
-            >
-              {data.score}
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 10 }}>
+              <div
+                style={{
+                  fontSize: 56,
+                  fontWeight: 700,
+                  color: '#fff',
+                  letterSpacing: '-0.03em',
+                  lineHeight: 1,
+                }}
+              >
+                {(data.score / 10).toFixed(1)}
+              </div>
+              <div style={{ fontSize: 20, color: 'var(--deal-text-3)' }}>/10</div>
             </div>
-            <ScoreBar score={data.score} />
-            <div style={{ fontSize: 12, color: 'var(--deal-text-2)', marginTop: 12 }}>
-              Strong performance
+            <div style={{ height: 4, background: 'var(--deal-border)', borderRadius: 999, overflow: 'hidden' }}>
+              <div
+                style={{
+                  width: `${data.score}%`,
+                  height: '100%',
+                  background: 'var(--deal-signal)',
+                  transition: 'width 0.6s ease-out',
+                }}
+              />
             </div>
           </Card>
 
-          {/* Stats */}
-          <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
-            <Card style={{ flex: 1, padding: 16, textAlign: 'center' }}>
-              <div className="caption" style={{ fontSize: 10, marginBottom: 6 }}>MOVES</div>
-              <div style={{ fontSize: 24, fontWeight: 600, color: 'var(--deal-signal)' }}>
-                {data.moves}
+          {/* What Worked */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
+              <div
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  background: 'var(--deal-signal)',
+                }}
+              />
+              <div className="caption" style={{ fontSize: 10, color: 'var(--deal-signal)' }}>
+                WHAT WORKED
               </div>
-            </Card>
-            <Card style={{ flex: 1, padding: 16, textAlign: 'center' }}>
-              <div className="caption" style={{ fontSize: 10, marginBottom: 6 }}>WON</div>
-              <div style={{ fontSize: 24, fontWeight: 600, color: 'var(--deal-signal)' }}>
-                ${(data.won / 1000).toFixed(0)}K
-              </div>
-            </Card>
-          </div>
-
-          {/* Strengths */}
-          <div className="caption" style={{ marginBottom: 12 }}>WHAT YOU DID WELL</div>
-          <Card style={{ marginBottom: 20 }}>
+            </div>
             {data.strengths.map((text, i) => (
               <div
                 key={i}
@@ -158,21 +256,32 @@ export default function DebriefPage() {
                   display: 'flex',
                   gap: 10,
                   alignItems: 'flex-start',
-                  padding: '12px 0',
-                  borderBottom: i < data.strengths.length - 1 ? '1px solid var(--deal-raised)' : 'none',
+                  marginBottom: 14,
                 }}
               >
-                <Icon name="check" size={16} color="var(--deal-signal)" strokeWidth={2.4} />
-                <span style={{ fontSize: 13, color: 'var(--deal-text-2)', lineHeight: 1.6, flex: 1 }}>
+                <Icon name="check" size={16} color="var(--deal-signal)" strokeWidth={2.5} />
+                <span style={{ fontSize: 14, color: 'var(--deal-text-2)', lineHeight: 1.6 }}>
                   {text}
                 </span>
               </div>
             ))}
-          </Card>
+          </div>
 
-          {/* Improvements */}
-          <div className="caption" style={{ marginBottom: 12 }}>ROOM FOR IMPROVEMENT</div>
-          <Card style={{ marginBottom: 20 }}>
+          {/* Do Better Next Time */}
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
+              <div
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  background: 'var(--deal-warn)',
+                }}
+              />
+              <div className="caption" style={{ fontSize: 10, color: 'var(--deal-warn)' }}>
+                DO BETTER NEXT TIME
+              </div>
+            </div>
             {data.improvements.map((text, i) => (
               <div
                 key={i}
@@ -180,42 +289,29 @@ export default function DebriefPage() {
                   display: 'flex',
                   gap: 10,
                   alignItems: 'flex-start',
-                  padding: '12px 0',
-                  borderBottom: i < data.improvements.length - 1 ? '1px solid var(--deal-raised)' : 'none',
+                  marginBottom: 14,
                 }}
               >
-                <span style={{ color: 'var(--deal-warn)', fontWeight: 700, fontSize: 14, lineHeight: 1.5 }}>
-                  →
-                </span>
-                <span style={{ fontSize: 13, color: 'var(--deal-text-2)', lineHeight: 1.6, flex: 1 }}>
+                <span style={{ color: 'var(--deal-warn)', fontWeight: 600, fontSize: 14 }}>→</span>
+                <span style={{ fontSize: 14, color: 'var(--deal-text-2)', lineHeight: 1.6 }}>
                   {text}
                 </span>
               </div>
             ))}
-          </Card>
+          </div>
 
           <SafeBottom h={12} />
         </div>
 
         <div style={{ padding: '12px 20px', borderTop: '1px solid var(--deal-raised)', flexShrink: 0 }}>
-          <Button variant="primary" fullWidth onClick={() => router.push('/sessions/1/win')}>
-            Share this win <Icon name="arrowRight" size={18} color="var(--deal-signal-ink)" />
+          <Button
+            variant="primary"
+            fullWidth
+            onClick={() => router.push('/sessions/1/win')}
+            style={{ background: 'var(--deal-danger)', border: 'none' }}
+          >
+            <Icon name="share" size={18} color="#fff" strokeWidth={2} /> Share my win
           </Button>
-          <div style={{ textAlign: 'center', marginTop: 10 }}>
-            <button
-              onClick={() => router.push('/dashboard')}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: 'var(--deal-text-3)',
-                fontSize: 12,
-                cursor: 'pointer',
-                padding: 0,
-              }}
-            >
-              Back to dashboard
-            </button>
-          </div>
         </div>
         <SafeBottom h={16} />
       </Screen>

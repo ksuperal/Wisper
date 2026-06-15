@@ -1,6 +1,7 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useRouter, useParams } from 'next/navigation';
 import { Screen, SafeBottom } from '@/components/layout/screen';
 import { TopBar } from '@/components/layout/top-bar';
 import { Card } from '@/components/ui/card';
@@ -9,10 +10,103 @@ import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icons';
 import { SectionLabel } from '@/components/screens/section-label';
 import { DEMO_MOVES } from '@/lib/constants';
+import { generateStrategy, getSession, checkBackendHealth } from '@/lib/api';
 
 export default function StrategyPage() {
   const router = useRouter();
-  const opening = DEMO_MOVES[0].say;
+  const params = useParams();
+  const sessionId = params?.id as string;
+
+  const [loading, setLoading] = useState(true);
+  const [strategy, setStrategy] = useState<any>(null);
+  const [sessionData, setSessionData] = useState<any>(null);
+
+  useEffect(() => {
+    const loadStrategy = async () => {
+      try {
+        const isBackendHealthy = await checkBackendHealth();
+
+        if (isBackendHealthy && sessionId !== '1') {
+          // Load real session data
+          const session = await getSession(sessionId);
+          setSessionData(session);
+
+          // Generate strategy
+          const strategyData = await generateStrategy(sessionId);
+          setStrategy(strategyData);
+        } else {
+          // Use demo data
+          setStrategy({
+            target_range: '$95–100K',
+            floor: '$88K',
+            gap: '$13K',
+            opening_move: DEMO_MOVES[0].say,
+            their_likely_moves: [
+              '"That\'s our budget ceiling."',
+              '"We need a decision by Friday."',
+              '"You\'re our top candidate." — creates urgency.',
+            ],
+            your_leverage: [
+              'Competing offer: $91K from Company B.',
+              "3 months open role — they're moving slowly.",
+              'Bridge to signing bonus if base salary stalls.',
+            ],
+          });
+          setSessionData({
+            type: 'Salary',
+            id: '1',
+          });
+        }
+      } catch (error) {
+        console.error('Failed to load strategy:', error);
+        // Fall back to demo data
+        setStrategy({
+          target_range: '$95–100K',
+          floor: '$88K',
+          gap: '$13K',
+          opening_move: DEMO_MOVES[0].say,
+          their_likely_moves: [
+            '"That\'s our budget ceiling."',
+            '"We need a decision by Friday."',
+            '"You\'re our top candidate." — creates urgency.',
+          ],
+          your_leverage: [
+            'Competing offer: $91K from Company B.',
+            "3 months open role — they're moving slowly.",
+            'Bridge to signing bonus if base salary stalls.',
+          ],
+        });
+        setSessionData({
+          type: 'Salary',
+          id: '1',
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadStrategy();
+  }, [sessionId]);
+
+  if (loading || !strategy) {
+    return (
+      <div
+        style={{
+          minHeight: '100vh',
+          background: 'var(--deal-ink)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 15, color: 'var(--deal-text-2)' }}>
+            Building your playbook...
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--deal-ink)', display: 'flex', flexDirection: 'column' }}>
@@ -47,17 +141,23 @@ export default function StrategyPage() {
               READY
             </span>
           </div>
-          <div style={{ fontSize: 16, fontWeight: 500 }}>Salary · TechCorp</div>
+          <div style={{ fontSize: 16, fontWeight: 500 }}>
+            {sessionData?.type || 'Salary'} · TechCorp
+          </div>
           <div style={{ fontSize: 12, color: 'var(--deal-text-3)', marginBottom: 16 }}>
-            June 13, 2026
+            {new Date().toLocaleDateString('en-US', {
+              month: 'long',
+              day: 'numeric',
+              year: 'numeric',
+            })}
           </div>
 
           {/* Range card */}
           <Card style={{ padding: 0, marginBottom: 16, display: 'flex' }}>
             {[
-              { label: 'Target', val: '$95–100K', c: 'var(--deal-signal)' },
-              { label: 'Floor', val: '$88K', c: '#fff' },
-              { label: 'Gap', val: '$13K', c: '#fff' },
+              { label: 'Target', val: strategy.target_range, c: 'var(--deal-signal)' },
+              { label: 'Floor', val: strategy.floor, c: '#fff' },
+              { label: 'Gap', val: strategy.gap, c: '#fff' },
             ].map((col, i) => (
               <div
                 key={col.label}
@@ -99,18 +199,14 @@ export default function StrategyPage() {
                 fontStyle: 'italic',
               }}
             >
-              "{opening}"
+              "{strategy.opening_move}"
             </div>
           </Card>
 
           {/* Their moves */}
           <SectionLabel style={{ marginBottom: 12 }}>THEIR LIKELY MOVES</SectionLabel>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 24 }}>
-            {[
-              '"That\'s our budget ceiling."',
-              '"We need a decision by Friday."',
-              '"You\'re our top candidate." — creates urgency.',
-            ].map((text, i) => (
+            {strategy.their_likely_moves.map((text: string, i: number) => (
               <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                 <span
                   style={{
@@ -133,11 +229,7 @@ export default function StrategyPage() {
           {/* Leverage */}
           <SectionLabel style={{ marginBottom: 12 }}>YOUR LEVERAGE</SectionLabel>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 24 }}>
-            {[
-              'Competing offer: $91K from Company B.',
-              "3 months open role — they're moving slowly.",
-              'Bridge to signing bonus if base salary stalls.',
-            ].map((text, i) => (
+            {strategy.your_leverage.map((text: string, i: number) => (
               <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                 <Icon name="check" size={16} color="var(--deal-signal)" strokeWidth={2.4} />
                 <span style={{ fontSize: 13, color: 'var(--deal-text-2)', lineHeight: 1.5 }}>
@@ -149,7 +241,14 @@ export default function StrategyPage() {
         </div>
 
         <div style={{ padding: '12px 20px', borderTop: '1px solid var(--deal-raised)', flexShrink: 0 }}>
-          <Button variant="primary" fullWidth onClick={() => router.push('/live')}>
+          <Button
+            variant="primary"
+            fullWidth
+            onClick={() => {
+              sessionStorage.setItem('currentSessionId', sessionId);
+              router.push('/live');
+            }}
+          >
             I'm ready — start session
           </Button>
           <div style={{ fontSize: 11, color: '#444', textAlign: 'center', marginTop: 10 }}>

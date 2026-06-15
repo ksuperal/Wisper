@@ -10,6 +10,7 @@ import { Field } from '@/components/ui/field';
 import { TextArea } from '@/components/ui/text-area';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icons';
+import { createSession, checkBackendHealth } from '@/lib/api';
 
 const STYLES = [
   { id: 'collaborative', label: 'Collaborative', help: 'Preserve the relationship' },
@@ -34,18 +35,52 @@ export default function SetupStep2Page() {
     }
   }, [router]);
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     setLoading(true);
-    // Merge with step 1 data
-    const step1Data = JSON.parse(sessionStorage.getItem('setupData') || '{}');
-    const fullData = { ...step1Data, ...data };
-    sessionStorage.setItem('fullSetupData', JSON.stringify(fullData));
 
-    // Simulate API call
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      // Merge with step 1 data
+      const step1Data = JSON.parse(sessionStorage.getItem('setupData') || '{}');
+
+      // Check if backend is available
+      const isBackendHealthy = await checkBackendHealth();
+
+      if (isBackendHealthy) {
+        // Create session via API
+        const session = await createSession({
+          type: step1Data.category || 'salary',
+          goal: step1Data.goal,
+          opening_offer: step1Data.offer,
+          walk_away: step1Data.floor,
+          leverage: data.leverage,
+          pressure: data.pressure || '',
+          style: data.style,
+        });
+
+        // Store session ID for later use
+        sessionStorage.setItem('currentSessionId', session.id);
+
+        // Navigate to strategy page with real session ID
+        router.push(`/sessions/${session.id}/strategy`);
+      } else {
+        // Backend not available, fall back to demo mode
+        console.warn('Backend not available, using demo mode');
+        const fullData = { ...step1Data, ...data };
+        sessionStorage.setItem('fullSetupData', JSON.stringify(fullData));
+
+        // Use demo session ID
+        router.push('/sessions/1/strategy');
+      }
+    } catch (error) {
+      console.error('Failed to create session:', error);
+      // Fall back to demo mode on error
+      const step1Data = JSON.parse(sessionStorage.getItem('setupData') || '{}');
+      const fullData = { ...step1Data, ...data };
+      sessionStorage.setItem('fullSetupData', JSON.stringify(fullData));
       router.push('/sessions/1/strategy');
-    }, 1400);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const activeStyle = STYLES.find((s) => s.id === data.style) || STYLES[1];
